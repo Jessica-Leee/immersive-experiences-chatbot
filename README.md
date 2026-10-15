@@ -1,87 +1,46 @@
+# Chatbot for Immersive Experiences
 
-# 📄 Project Documentation: Chatbot for Immersive Experiences
+A Streamlit prototype for questions about immersive experiences, AR, VR, creator workflows, and the BLCKUNICRN platform. It combines a document-retrieval workflow with an external language-model response.
 
-This project contains two main Python files:
+## Implemented workflow
 
-- `data_processing.py` – Handles PDF processing, chunking, and vector embedding.
-- `app.py` – A Streamlit web interface for interacting with a chatbot based on the processed data.
+1. `embedding_generator.py` extracts PDF text with PyMuPDF, splits it into token-sized chunks, requests OpenAI embeddings, and prepares Pinecone records containing source and chunk metadata.
+2. `streamlit_app.py` queries a Pinecone index through LangChain's `RetrievalQA` chain.
+3. The QA result is added to a platform overview and the current question, then sent to the DeepSeek chat API for the displayed answer.
+4. Streamlit keeps and displays chat messages for the current session. If retrieval initialization fails or returns no result, the app can fall back to its built-in platform overview.
 
----
+This is an integration of Streamlit, OpenAI embeddings, Pinecone, LangChain, and DeepSeek. It does not train a language model.
 
-## 📁 File Overview
+## Setup and launch
 
-### `data_processing.py`
-- Loads and processes multiple PDFs listed in the `SOURCES` list.
-- Extracts text from PDFs using `PyMuPDF (fitz)`.
-- Chunks text by token count using `tiktoken`.
-- Embeds text into a Pinecone vector store using OpenAI embeddings.
+`runtime.txt` targets Python 3.10. Create an environment and install the listed dependencies:
 
-### `app.py`
-- A Streamlit UI that allows users to interact with the embedded data.
-- Uses LangChain’s `RetrievalQA` for answering questions based on the Pinecone vector store.
-- Displays chat history and responses dynamically.
-
----
-
-## ⚙️ Environment Setup
-
-This project relies on environment variables for API keys and configuration. These should be stored in a `.env` file located in the project root.
-
-**`.env` Example:**
-```env
-OPENAI_API_KEY=your_openai_key_here
-PINECONE_API_KEY=your_pinecone_key_here
-PINECONE_ENV=your_pinecone_env
-PINECONE_INDEX_NAME=your_index_name
+```sh
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install -r requirements.txt
 ```
 
-> ⚠️ **Important:**  
-> Make sure `.env` is added to your `.gitignore` file to avoid accidentally leaking your keys.
+Configure these names through environment variables or Streamlit secrets:
 
-```bash
-# .gitignore
-.env
+- `OPENAI_API_KEY`
+- `PINECONE_API_KEY`
+- `DEEPSEEK_API_KEY`
+
+A local `.env` file is also supported when `python-dotenv` is installed. Keep configuration values out of source control. The app currently uses the hard-coded Pinecone index name `blckunicrn`; it does not read `PINECONE_ENV` or `PINECONE_INDEX_NAME`.
+
+With the services configured and the index prepared:
+
+```sh
+streamlit run streamlit_app.py
 ```
 
----
+`streamlit_app.py` checks for missing API keys and stops with an explanatory message. `app.py` is an alternate implementation; the command above uses the entry point with that guard.
 
-## 🔑 Where to Change API Keys
+## Data preparation and limitations
 
-API keys are loaded using `os.getenv(...)`:
+The ingestion file is **`embedding_generator.py`**. Its `SOURCES` and `IDs` lists select local PDFs; the source PDFs are not included in this repository. Supply documents you can use and retain their source attribution.
 
-- In `data_processing.py`:
-  ```python
-  openai_api_key = os.getenv("OPENAI_API_KEY")
-  ```
+The ingestion helper currently references `Pinecone` and `ServerlessSpec` without importing those symbols. It also directly imports `tiktoken`, which is not explicitly listed in `requirements.txt`. Resolve those issues and check SDK compatibility before running ingestion. The script makes embedding requests and writes to Pinecone; it is not an offline preparation step.
 
-- In `app.py`:
-  ```python
-  openai_api_key = os.getenv("OPENAI_API_KEY")
-  ```
-
-If you want to switch environments or services, simply change the keys in your `.env` file — **no code modification is needed**.
-
----
-
-## 🚀 Running the App
-
-1. **Install Dependencies**
-   ```bash
-   pip install -r requirements.txt
-   ```
-
-2. **Prepare .env**
-   - Create a `.env` file and insert your API keys as described above.
-
-3. **Run the Streamlit App**
-   ```bash
-   streamlit run app.py
-   ```
-
----
-
-## 📝 Notes
-
-- The `SOURCES` and `IDs` arrays in `data_processing.py` determine which PDFs are loaded. Add your PDFs there if needed.
-- Make sure the names in `SOURCES` match actual filenames in your project directory.
-- Ensure `pinecone` and `openai` services are correctly set up before running the app.
+The repository has no retrieval benchmark or answer-quality evaluation. Answers are not guaranteed to be supported by the documents, and the final response does not display source citations. Chat history is shown in the interface, but the outgoing DeepSeek request contains the current constructed prompt rather than the full conversation.
