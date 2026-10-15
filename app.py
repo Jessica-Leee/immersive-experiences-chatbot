@@ -2,6 +2,7 @@ import os
 import json
 import streamlit as st
 import requests
+from configuration import resolve_api_key
 # Try to import dotenv, but handle the case where it's not installed
 try:
     from dotenv import load_dotenv
@@ -17,7 +18,7 @@ from langchain.chains import RetrievalQA
 
 # Get API keys from environment variables or Streamlit secrets
 def get_api_key(key_name):
-    return os.getenv(key_name)
+    return resolve_api_key(key_name, secrets=getattr(st, "secrets", None))
 
 
 openai_api_key = get_api_key("OPENAI_API_KEY")

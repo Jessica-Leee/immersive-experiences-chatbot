@@ -47,3 +47,7 @@ instance/
 
 # MacOS
 .DS_Store
+.venv/
+.env.*
+!.env.example
+.pytest_cache/

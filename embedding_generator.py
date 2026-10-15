@@ -3,8 +3,7 @@ import os
 import tiktoken
 import openai
 import fitz
-import pinecone
-load_dotenv()
+from pinecone import Pinecone, ServerlessSpec
 
 SOURCES = ["onverse.pdf", "Book.pdf", "sony_music.pdf", "research_immersive_experience.pdf", "audience_report_immersive.pdf","Annual Report.pdf","Article Paper.pdf","Data vision.pdf","Immersive Analytics.pdf","immersive technology.pdf","Outlook.pdf","Slide Deck.pdf"]
 IDs = ["onverse", "book", "sony music", "research", "audience report","Annual Report","Article Paper","Data vision","Immersive Analytics","immersive technology","Outlook","Slide Deck"]
@@ -28,6 +27,8 @@ class Generator:
         self.openai_api_key = openai_api_key
 
     def chunk_text_by_tokens(self, text, chunk_size, encoding_name="cl100k_base"):
+        if chunk_size <= 0:
+            raise ValueError("chunk_size must be greater than zero")
         encoding = tiktoken.get_encoding(encoding_name)
         tokens = encoding.encode(text)
         return [encoding.decode(tokens[i:i + chunk_size]) for i in range(0, len(tokens), chunk_size)]
@@ -55,7 +56,7 @@ class PineconeStore:
             raise ValueError("PINECONE_API_KEY environment variable not set")
         self.pc = Pinecone(api_key=pinecone_api_key)
         self.index_name = "blckunicrn"
-        if not self.pc.has_index(self.index_name):
+        if self.index_name not in self.pc.list_indexes().names():
             self.pc.create_index(
                 name=self.index_name,
                 dimension=1536,
@@ -64,6 +65,8 @@ class PineconeStore:
             )
 
     def save_vectors(self, vectors, metadata, chunks):
+        if len(vectors) != len(chunks):
+            raise ValueError("Each vector must have exactly one text chunk")
         index = self.pc.Index(self.index_name)
         for i, vector in enumerate(vectors):
             vector_id = f"{metadata['id']}_chunk_{i}"
@@ -76,16 +79,22 @@ class PineconeStore:
             index.upsert(vectors=[(vector_id, vector, chunk_metadata)])
 
 
-# Process the PDF and store vectors in Pinecone
-for i in range(len(SOURCES)):
-    script_dir = os.path.dirname(os.path.abspath(__file__))
-    pdf_path = os.path.join(script_dir, SOURCES[i])
-    loader = PDFLoader(pdf_path)
-    text = loader.extract_text()
-    print("text_extracted")
-    generator = Generator()
-    chunks, embeddings = generator.process_text(text, chunk_size=800)
-    print("embeddings_converted")
-    vector_store = PineconeStore()
-    vector_store.save_vectors(embeddings, {"id": IDs[i], "source": SOURCES[i]}, chunks)
-    print("vectors saved")
+def main():
+    """Explicitly process configured PDFs and write embeddings to Pinecone."""
+    load_dotenv()
+    for i in range(len(SOURCES)):
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        pdf_path = os.path.join(script_dir, SOURCES[i])
+        loader = PDFLoader(pdf_path)
+        text = loader.extract_text()
+        print("text_extracted")
+        generator = Generator()
+        chunks, embeddings = generator.process_text(text, chunk_size=800)
+        print("embeddings_converted")
+        vector_store = PineconeStore()
+        vector_store.save_vectors(embeddings, {"id": IDs[i], "source": SOURCES[i]}, chunks)
+        print("vectors saved")
+
+
+if __name__ == "__main__":
+    main()

@@ -1,33 +1,46 @@
 # Chatbot for Immersive Experiences
 
-A Streamlit prototype for questions about immersive experiences, AR, VR, creator workflows, and the BLCKUNICRN platform. It combines a document-retrieval workflow with an external language-model response.
+A Streamlit prototype for questions about immersive experiences, AR, VR, creator workflows, and the BLCKUNICRN platform. It integrates document retrieval with an external language-model response; it does not train a language model.
 
 ## Implemented workflow
 
-1. `embedding_generator.py` extracts PDF text with PyMuPDF, splits it into token-sized chunks, requests OpenAI embeddings, and prepares Pinecone records containing source and chunk metadata.
-2. `streamlit_app.py` queries a Pinecone index through LangChain's `RetrievalQA` chain.
-3. The QA result is added to a platform overview and the current question, then sent to the DeepSeek chat API for the displayed answer.
-4. Streamlit keeps and displays chat messages for the current session. If retrieval initialization fails or returns no result, the app can fall back to its built-in platform overview.
+1. `embedding_generator.py` extracts PDF text with PyMuPDF, splits it into token chunks, requests OpenAI embeddings, and writes source/chunk metadata to Pinecone.
+2. `streamlit_app.py` queries Pinecone through LangChain's `RetrievalQA` chain.
+3. The QA result and a platform overview become context for a DeepSeek chat request.
+4. Streamlit displays chat messages for the current session. If retrieval is unavailable, the app can fall back to its built-in overview.
 
-This is an integration of Streamlit, OpenAI embeddings, Pinecone, LangChain, and DeepSeek. It does not train a language model.
+The ingestion helper uses `text-embedding-ada-002` and a 1,536-dimensional index. The application and ingestion script currently share the hard-coded index name `blckunicrn`.
 
-## Setup and launch
+## Setup
 
-`runtime.txt` targets Python 3.10. Create an environment and install the listed dependencies:
+`runtime.txt` targets Python 3.10:
 
 ```sh
 python3 -m venv .venv
 source .venv/bin/activate
 python -m pip install -r requirements.txt
+cp .env.example .env
 ```
 
-Configure these names through environment variables or Streamlit secrets:
+Provide these configuration names locally, through environment variables or Streamlit secrets:
 
 - `OPENAI_API_KEY`
 - `PINECONE_API_KEY`
 - `DEEPSEEK_API_KEY`
 
-A local `.env` file is also supported when `python-dotenv` is installed. Keep configuration values out of source control. The app currently uses the hard-coded Pinecone index name `blckunicrn`; it does not read `PINECONE_ENV` or `PINECONE_INDEX_NAME`.
+The `.env.example` file contains no values. Keep the populated `.env` and Streamlit secrets out of source control. An absent Streamlit secrets file falls back to environment configuration.
+
+## Documents and launch
+
+The source PDFs are not included. Supply documents you can use, retain their source attribution, and update the `SOURCES` and `IDs` lists in **`embedding_generator.py`**.
+
+This explicit command creates embeddings and writes to Pinecone:
+
+```sh
+python embedding_generator.py
+```
+
+Importing the helper does not read `.env`, open PDFs, or contact services. The script uses the Pinecone v3 `list_indexes().names()` interface and creates its index only when absent.
 
 With the services configured and the index prepared:
 
@@ -35,12 +48,18 @@ With the services configured and the index prepared:
 streamlit run streamlit_app.py
 ```
 
-`streamlit_app.py` checks for missing API keys and stops with an explanatory message. `app.py` is an alternate implementation; the command above uses the entry point with that guard.
+This entry point checks required keys and stops with an explanatory message if they are missing. `app.py` remains an alternate UI implementation.
 
-## Data preparation and limitations
+## Offline checks
 
-The ingestion file is **`embedding_generator.py`**. Its `SOURCES` and `IDs` lists select local PDFs; the source PDFs are not included in this repository. Supply documents you can use and retain their source attribution.
+The checks use only the Python standard library and replace external SDKs at the import boundary:
 
-The ingestion helper currently references `Pinecone` and `ServerlessSpec` without importing those symbols. It also directly imports `tiktoken`, which is not explicitly listed in `requirements.txt`. Resolve those issues and check SDK compatibility before running ingestion. The script makes embedding requests and writes to Pinecone; it is not an offline preparation step.
+```sh
+python -m unittest discover -s tests -p 'test_*.py' -v
+```
 
-The repository has no retrieval benchmark or answer-quality evaluation. Answers are not guaranteed to be supported by the documents, and the final response does not display source citations. Chat history is shown in the interface, but the outgoing DeepSeek request contains the current constructed prompt rather than the full conversation.
+They cover environment fallback, safe helper imports, missing-key handling, chunk boundaries, the index-exists/create paths, vector/chunk validation, and stable source metadata. They never call OpenAI, Pinecone, DeepSeek, or Streamlit services and do not read a secrets file.
+
+## Limitations
+
+The dependency installation and live service workflow have not been verified by these offline checks. The document corpus and retrieval/answer benchmarks are not included. Answers may be unsupported, and the final UI does not display source citations. Chat history is displayed, but the outgoing DeepSeek request includes only the current constructed prompt rather than the full conversation.

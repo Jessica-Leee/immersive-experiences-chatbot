@@ -1,6 +1,7 @@
 import os
 import streamlit as st
 import requests
+from configuration import resolve_api_key
 
 # Try to import dotenv, but handle the case where it's not installed
 try:
@@ -18,11 +19,7 @@ from langchain.chains import RetrievalQA
 
 # Get API keys from environment variables or Streamlit secrets
 def get_api_key(key_name):
-    # Try to get from Streamlit secrets first
-    if hasattr(st, "secrets") and key_name in st.secrets:
-        return st.secrets[key_name]
-    # Then try environment variables
-    return os.getenv(key_name)
+    return resolve_api_key(key_name, secrets=getattr(st, "secrets", None))
 
 openai_api_key = get_api_key("OPENAI_API_KEY")
 pinecone_api_key = get_api_key("PINECONE_API_KEY")
