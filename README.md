@@ -1,4 +1,4 @@
-# Chatbot for Immersive Experiences
+# Immersive Experiences Chatbot
 
 A Streamlit prototype for questions about immersive experiences, AR, VR, creator workflows, and the BLCKUNICRN platform. It integrates document retrieval with an external language-model response; it does not train a language model.
 
